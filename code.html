@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Data Tracker with Per-User Analysis</title>
+<style>
+  /* Modern clean styling */
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #FFFDD0; /* Cream background */
+    margin: 0;
+    padding: 20px;
+    color: #333;
+  }
+  h1 {
+    text-align: center;
+    color: #2c3e50;
+    margin-bottom: 10px;
+  }
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 8px;
+    padding: 25px 30px 40px 30px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+  }
+  label {
+    display: block;
+    font-weight: 600;
+    margin-top: 15px;
+    margin-bottom: 5px;
+    color: #34495e;
+  }
+  select, input[type="text"], input[type="url"], textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    font-size: 15px;
+    transition: border-color 0.3s;
+  }
+  select:focus, input[type="text"]:focus, input[type="url"]:focus, textarea:focus {
+    outline: none;
+    border-color: #3498db;
+  }
+  textarea {
+    resize: vertical;
+    min-height: 60px;
+  }
+  .row-flex {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .row-flex > * {
+    flex: 1 1 200px;
+  }
+  button {
+    background: #3498db;
+    border: none;
+    color: white;
+    font-weight: 700;
+    padding: 12px 25px;
+    margin-top: 25px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+    box-shadow: 0 5px 15px rgba(52,152,219,0.4);
+    transition: background 0.3s;
+  }
+  button:hover {
+    background: #2980b9;
+  }
+  .tally-section {
+    margin-top: 40px;
+    border-top: 2px solid #ecf0f1;
+    padding-top: 30px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+  }
+  th, td {
+    padding: 11px 12px;
+    border: 1px solid #ddd;
+    text-align: left;
+    font-weight: 500;
+  }
+  th {
+    background: #3498db;
+    color: white;
+  }
+  .footer-note {
+    text-align: center;
+    margin-top: 50px;
+    font-size: 0.9em;
+    color: #999;
+  }
+  #add-teammate-btn {
+    background: #9b59b6; /* purple shade */
+    margin-top: 10px;
+    margin-bottom: 10px;
+    box-shadow: 0 5px 15px rgba(155,89,182,0.4);
+  }
+  #add-teammate-btn:hover {
+    background: #833ab4;
+  }
+  @media (max-width: 600px) {
+    .row-flex {
+      flex-direction: column;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="container" role="main">
+    <h1>Data Tracker &amp; Per-User Analysis</h1>
+
+    <label for="user-select">Select or Enter User Name:</label>
+    <input id="user-select" type="text" list="user-list" placeholder="Type or select user..." autocomplete="off" />
+
+    <button id="add-teammate-btn" title="Set user to Teammate">Add Teammate</button>
+
+    <datalist id="user-list">
+      <!-- dynamically populated user options -->
+    </datalist>
+
+    <label for="role-select">Select Concierge Role:</label>
+    <select id="role-select" aria-describedby="role-desc" required>
+      <option value="" disabled selected>Select a role</option>
+      <option value="Patient Concierge">Patient Concierge</option>
+      <option value="Practitioner Concierge">Practitioner Concierge</option>
+    </select>
+    <small id="role-desc" style="color:#666;">Selecting role updates available ticket types.</small>
+
+    <label for="ticket-type-select">Select Ticket Type:</label>
+    <select id="ticket-type-select" disabled required>
+      <option value="" disabled selected>Select a ticket type</option>
+    </select>
+
+    <div class="row-flex">
+      <div>
+        <label for="link-input">Enter Link (URL):</label>
+        <input type="url" id="link-input" placeholder="https://example.com" />
+      </div>
+      <div>
+        <label for="date-time-input">Date &amp; Time (Auto):</label>
+        <input type="text" id="date-time-input" readonly aria-readonly="true" />
+      </div>
+    </div>
+
+    <label for="comment-input">Comment:</label>
+    <textarea id="comment-input" placeholder="Add any comments here..."></textarea>
+
+    <button id="add-entry-btn" title="Add this entry">Add Entry</button>
+
+    <div class="tally-section" aria-live="polite" aria-atomic="true">
+      <h2>Data Analysis for User: <span id="current-user-label">None</span></h2>
+      <table id="tally-table" aria-label="Ticket type tally table">
+        <thead>
+          <tr><th>Ticket Type</th><th>Count</th></tr>
+        </thead>
+        <tbody>
+          <!-- dynamically populated -->
+        </tbody>
+      </table>
+
+      <button id="download-btn" style="background:#27ae60; margin-top:15px;" disabled title="Download user data as CSV">Download User Data</button>
+    </div>
+  </div>
+
+<script>
+  (() => {
+    const userInput = document.getElementById('user-select');
+    const userDatalist = document.getElementById('user-list');
+    const addTeammateBtn = document.getElementById('add-teammate-btn');
+    const roleSelect = document.getElementById('role-select');
+    const ticketTypeSelect = document.getElementById('ticket-type-select');
+    const linkInput = document.getElementById('link-input');
+    const dateTimeInput = document.getElementById('date-time-input');
+    const commentInput = document.getElementById('comment-input');
+    const addEntryBtn = document.getElementById('add-entry-btn');
+    const tallyTableBody = document.querySelector('#tally-table tbody');
+    const currentUserLabel = document.getElementById('current-user-label');
+    const downloadBtn = document.getElementById('download-btn');
+
+    // Ticket types by role
+    const ticketTypes = {
+      "Patient Concierge": [
+        "Quick Win",
+        "Easy Narrow Down",
+        "Replenishment",
+        "Overcomm"
+      ],
+      "Practitioner Concierge": [
+        "Custom notes",
+        "Discount Code",
+        "k Bus Ops Q",
+        "Failed Messages"
+      ]
+    };
+
+    // Current user in context
+    let currentUser = null;
+
+    // Utility: Format Date Time string
+    function getCurrentDateTimeString() {
+      const now = new Date();
+      // Format: YYYY-MM-DD HH:MM:ss
+      const pad = n => n.toString().padStart(2, '0');
+      return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    }
+
+    // Save an entry to localStorage under user key
+    function saveEntryForUser(user, entry) {
+      let data = JSON.parse(localStorage.getItem("dataTrackerUsers") || "{}");
+      if (!data[user]) data[user] = [];
+      data[user].push(entry);
+      localStorage.setItem("dataTrackerUsers", JSON.stringify(data));
+    }
+
+    // Load all users from storage as array
+    function loadAllUsers() {
+      let data = JSON.parse(localStorage.getItem("dataTrackerUsers") || "{}");
+      return Object.keys(data);
+    }
+
+    // Load entries for user
+    function loadUserEntries(user) {
+      let data = JSON.parse(localStorage.getItem("dataTrackerUsers") || "{}");
+      return data[user] || [];
+    }
+
+    // Populate user datalist
+    function updateUserDatalist() {
+      const users = loadAllUsers();
+      userDatalist.innerHTML = "";
+      for (const u of users) {
+        const option = document.createElement('option');
+        option.value = u;
+        userDatalist.appendChild(option);
+      }
+    }
+
+    // Populate ticket types dropdown based on selected role
+    function updateTicketTypesForRole(role) {
+      ticketTypeSelect.innerHTML = "";
+      if (!role || !ticketTypes[role]) {
+        ticketTypeSelect.disabled = true;
+        ticketTypeSelect.innerHTML = '<option value="" disabled selected>Select a ticket type</option>';
+        return;
+      }
+      ticketTypeSelect.disabled = false;
+      ticketTypeSelect.innerHTML = '<option value="" disabled selected>Select a ticket type</option>';
+      for (const tt of ticketTypes[role]) {
+        const option = document.createElement('option');
+        option.value = tt;
+        option.textContent = tt;
+        ticketTypeSelect.appendChild(option);
+      }
+    }
+
+    // Update date/time input with current time (called on focus + on add)
+    function updateDateTime() {
+      dateTimeInput.value = getCurrentDateTimeString();
+    }
+
+    // Analyze data for user: count tickets by type
+    function analyzeUserData(user) {
+      if (!user) return {};
+      const entries = loadUserEntries(user);
+      const counts = {};
+      for (const entry of entries) {
+        counts[entry.ticketType] = (counts[entry.ticketType] || 0) + 1;
+      }
+      return counts;
+    }
+
+    // Render tally table for user
+    function renderTallyTable(user) {
+      tallyTableBody.innerHTML = "";
+      if (!user) return;
+      const analysis = analyzeUserData(user);
+      // show ticket types in order of current role or all keys if no role
+      let keys = Object.keys(analysis);
+      if (roleSelect.value && ticketTypes[roleSelect.value]) {
+        // Include all ticket types of role (show 0 if no count)
+        keys = ticketTypes[roleSelect.value];
+      }
+      if (keys.length === 0) {
+        tallyTableBody.innerHTML = '<tr><td colspan="2" style="text-align:center; font-style: italic; color:#666;">No entries yet</td></tr>';
+        return;
+      }
+      for (const tt of keys) {
+        const count = analysis[tt] || 0;
+        const row = document.createElement('tr');
+        const tdType = document.createElement('td');
+        tdType.textContent = tt;
+        const tdCount = document.createElement('td');
+        tdCount.textContent = count;
+        row.appendChild(tdType);
+        row.appendChild(tdCount);
+        tallyTableBody.appendChild(row);
+      }
+    }
+
+    // Download data for user as CSV
+    function downloadUserData(user) {
+      if (!user) return;
+      const entries = loadUserEntries(user);
+      if (!entries.length) return;
+
+      const header = ["DateTime","Role","TicketType","Link","Comment"];
+      let csvContent = header.join(",") + "\n";
+
+      for (const e of entries) {
+        // Escape CSV fields by wrapping in quotes and replacing quotes with double quotes
+        const row = [
+          e.dateTime,
+          e.role,
+          e.ticketType,
+          e.link ? `"${e.link.replace(/"/g,'""')}"` : "",
+          e.comment ? `"${e.comment.replace(/"/g,'""')}"` : ""
+        ];
+        csvContent += row.join(",") + "\n";
+      }
+
+      const blob = new Blob([csvContent], {type: 'text/csv;charset=utf-8;'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${user.replace(/\s+/g, '_')}_data.csv`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }, 0);
+    }
+
+    // Update UI based on currentUser and input selections
+    function updateUIForCurrentUser() {
+      currentUserLabel.textContent = currentUser || "None";
+      if (!currentUser) {
+        downloadBtn.disabled = true;
+        renderTallyTable(null);
+        return;
+      }
+      downloadBtn.disabled = false;
+      renderTallyTable(currentUser);
+      // Update user input field to show currentUser
+      if (userInput.value !== currentUser) {
+        userInput.value = currentUser;
+      }
+    }
+
+    // Initialization and event bindings
+    function init() {
+      updateUserDatalist();
+      ticketTypeSelect.disabled = true;
+      updateDateTime();
+
+      // User input handling: when user inputs or selects user, update currentUser and analysis
+      userInput.addEventListener('change', () => {
+        const val = userInput.value.trim();
+        if (val.length === 0) {
+          currentUser = null;
+          updateUIForCurrentUser();
+          return;
+        }
+        currentUser = val;
+        updateUIForCurrentUser();
+      });
+
+      // Role select changes ticket types dropdown dynamically
+      roleSelect.addEventListener('change', (e) => {
+        updateTicketTypesForRole(roleSelect.value);
+      });
+
+      // Update date/time input on focus to current time
+      dateTimeInput.addEventListener('focus', updateDateTime);
+
+      // Add entry button click handler
+      addEntryBtn.addEventListener('click', () => {
+        // Validate required fields
+        if (!currentUser) {
+          alert("Please enter or select a user name.");
+          userInput.focus();
+          return;
+        }
+        if (!roleSelect.value) {
+          alert("Please select a concierge role.");
+          roleSelect.focus();
+          return;
+        }
+        if (!ticketTypeSelect.value) {
+          alert("Please select a ticket type.");
+          ticketTypeSelect.focus();
+          return;
+        }
+        // date time auto populated
+        const dt = getCurrentDateTimeString();
+
+        // Build entry object
+        const entry = {
+          dateTime: dt,
+          role: roleSelect.value,
+          ticketType: ticketTypeSelect.value,
+          link: linkInput.value.trim() || null,
+          comment: commentInput.value.trim() || null
+        };
+        // Save entry
+        saveEntryForUser(currentUser, entry);
+
+        // Update user list datalist, in case new user added
+        updateUserDatalist();
+
+        // Update analysis table
+        renderTallyTable(currentUser);
+
+        // Clear link and comment inputs for convenience
+        linkInput.value = "";
+        commentInput.value = "";
+        updateDateTime();
+
+        alert("Entry added successfully.");
+      });
+
+      // Download button click handler
+      downloadBtn.addEventListener('click', () => {
+        if (!currentUser) return;
+        downloadUserData(currentUser);
+      });
+
+      // Add Teammate button click handler
+      addTeammateBtn.addEventListener('click', () => {
+        currentUser = "Teammate";
+        userInput.value = currentUser;
+        updateUserDatalist();
+        updateUIForCurrentUser();
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', init);
+  })();
+</script>
+</body>
+</html>
+
